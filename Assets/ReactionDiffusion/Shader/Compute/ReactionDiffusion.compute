@@ -1,0 +1,101 @@
+﻿#pragma kernel init
+#pragma kernel simulate
+#pragma kernel fade
+//#pragma kernel randomSet
+//#include "../NoiseUtils.cginc"
+#define THREAD [numthreads(32, 32, 1)]
+RWTexture2D<float4> u;
+RWTexture2D<float4> v;
+float Du;
+float Dv;
+float feed;
+float kill;
+float dt;
+float dx;
+float TexSize;
+float time;
+float level;
+
+THREAD
+void init(uint2 id : SV_DispatchThreadID)
+{
+	int center = 10;
+
+	if (id.x > TexSize / 2 - center && id.x < TexSize / 2 + center && id.y > TexSize / 2 - center && id.y < TexSize / 2 + center) {
+		u[float2(id)] = float4(0.5.xxx, 1.0);
+		v[float2(id)] = float4(0.25.xxx, 1.0);
+
+	}
+	else {
+		u[float2(id)] = float4(1.0.xxx, 1.0);
+		v[float2(id)] = float4(0.0.xxx, 1.0);
+	}
+}
+
+
+
+THREAD
+void simulate(uint2 id : SV_DispatchThreadID)
+{
+	Du = 2e-5;
+	Dv = 1e-5;
+	//feed = 0.022;
+	//kill = 0.051;
+	dt = 1.0;
+	dx = 0.01;
+
+	/*
+	f, k = 0.04, 0.06  # amorphous
+	# f, k = 0.035, 0.065  # spots
+	# f, k = 0.012, 0.05  # wandering bubbles
+	# f, k = 0.025, 0.05  # waves
+	# f, k = 0.022, 0.051 # stripe
+	*/
+
+	if (id.x > 0 && id.y > 0 && id.x < TexSize && id.y < TexSize) {
+
+		for (int i = 0; i < 8; i++) {
+			float2 i0 = id + float2(-1.0, 0.0);
+			float2 i1 = id + float2(0.0, -1.0);
+			float2 i2 = id + float2(0.0, 1.0);
+			float2 i3 = id + float2(1.0, 0.0);
+
+			float lapU = (u[i0].r + u[i1].r + u[i2].r + u[i3].r - 4.0 * u[id].r) / (dx*dx);
+			float lapV = (v[i0].r + v[i1].r + v[i2].r + v[i3].r - 4.0 * v[id].r) / (dx*dx);
+
+			float dudt = Du * lapU - u[id].r * v[id].r * v[id].r + feed * (1.0 - u[id].r);
+			float dvdt = Dv * lapV + u[id].r * v[id].r * v[id].r - (feed + kill) * v[id].r;
+			u[id] += dt * float4(dudt, dudt, dudt, 0.0);
+			v[id] += dt * float4(dvdt, dvdt, dvdt, 0.0);
+		}
+	}
+}
+
+
+THREAD
+void fade(uint2 id : SV_DispatchThreadID)
+{
+	float4 _u = u[id];
+	float4 _v = v[id];
+	u[id] = _u * level;
+	v[id] = _v * level;
+
+
+}
+/*
+THREAD
+void randomSet(uint2 id : SV_DispatchThreadID)
+{
+	int center = 10;
+
+	if (rnd2(float2(id.x * time, id.y * time)) > 0.88) {
+		u[float2(id)] = float4(0.5.xxx, 1.0);
+		v[float2(id)] = float4(0.25.xxx, 1.0);
+
+	}
+	else {
+		u[float2(id)] = float4(1.0.xxx, 1.0);
+		v[float2(id)] = float4(0.0.xxx, 1.0);
+	}
+}
+*/
